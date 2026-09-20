@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador de Laboratorio de Química General</title>
+<style>
+:root{--bg:#f4f7fb;--card:#fff;--ink:#17324d;--muted:#64748b;--accent:#1266c9;--accent2:#0e9f8e;--warn:#e67e22;--danger:#c0392b;--line:#dbe4ee}
+*{box-sizing:border-box} body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:linear-gradient(120deg,#0c3970,#1266c9);color:#fff;padding:18px 24px;position:sticky;top:0;z-index:5}
+header h1{margin:0;font-size:24px} header p{margin:5px 0 0;opacity:.9}
+.app{max-width:1500px;margin:auto;padding:16px}
+.toolbar,.controls,.card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 4px 16px #17324d12}
+.toolbar{padding:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+button,select,input{font:inherit} button{border:0;border-radius:9px;padding:9px 13px;cursor:pointer;background:#e9f1fa;color:var(--ink);font-weight:600}
+button.primary{background:var(--accent);color:white} button.green{background:var(--accent2);color:white} button.orange{background:var(--warn);color:white}
+button:disabled{opacity:.45;cursor:not-allowed}.toolbar .mode{margin-left:auto;font-weight:700;color:var(--muted)}
+.layout{display:grid;grid-template-columns:290px 1fr 270px;gap:14px}
+.card{padding:14px}.card h2,.card h3{margin:0 0 10px}.small{font-size:12px;color:var(--muted)}
+.field{margin:9px 0}.field label{display:block;font-size:12px;font-weight:700;margin-bottom:4px}.field input,.field select{width:100%;padding:8px;border:1px solid #cbd7e4;border-radius:8px;background:white}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.reaction-tabs{display:flex;gap:6px;margin-bottom:10px}.reaction-tabs button{flex:1}.reaction-tabs button.active{background:#17324d;color:#fff}
+.views{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}.view{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;min-height:470px}.view-title{padding:10px 12px;background:#edf4fb;font-weight:800}.view-body{padding:10px;position:relative;height:420px}
+#macroCanvas,#microCanvas{width:100%;height:100%;border-radius:8px;background:#eef5fa}
+.symbolic{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;line-height:1.6}.eq{background:#f7fafc;border:1px solid var(--line);border-radius:9px;padding:9px;margin:8px 0}.net{border-left:4px solid var(--accent);padding-left:9px}.spectator{background:#fff5df;padding:8px;border-radius:8px}
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px}.metric{padding:8px;background:#f7fafc;border:1px solid var(--line);border-radius:8px}.metric b{display:block;font-size:17px}
+.measure{margin-top:12px}.measure button{width:100%;margin-top:6px}.readout{padding:10px;border-radius:9px;background:#102f4c;color:#fff;margin-top:8px;font-family:ui-monospace,monospace}
+.log{height:120px;overflow:auto;background:#f8fafc;border:1px solid var(--line);padding:8px;border-radius:8px;font-size:12px}.quiz{margin-top:12px;border:2px solid #f0b44d;background:#fffaf0;border-radius:10px;padding:10px}.quiz button{margin-top:6px}
+.footerbar{margin-top:14px;display:flex;justify-content:space-between;gap:10px;align-items:center}.progress{height:8px;background:#dfe8f2;border-radius:10px;overflow:hidden;flex:1}.progress>div{height:100%;background:var(--accent);width:0}
+@media(max-width:1100px){.layout{grid-template-columns:1fr}.views{grid-template-columns:1fr}.view{min-height:380px}.view-body{height:330px}.toolbar .mode{margin-left:0}}
+</style>
+</head>
+<body>
+<header>
+<h1>Simulador Interactivo de Laboratorio de Química General</h1>
+<p>Primer año universitario · representación multinivel de Johnstone · experimentar, medir, explicar</p>
+</header>
+<div class="app">
+  <div class="toolbar">
+    <div class="reaction-tabs">
+      <button data-r="acid" class="active">Ácido–Base</button>
+      <button data-r="redox">Óxido–Reducción</button>
+      <button data-r="precip">Precipitación</button>
+    </div>
+    <button id="start" class="primary">▶ Iniciar</button>
+    <button id="pause">Ⅱ Pausar</button>
+    <button id="rewind">⏪ Rebobinar</button>
+    <button id="reset">↻ Reiniciar</button>
+    <button id="speed">Velocidad ×1</button>
+    <span class="mode" id="status">Listo para experimentar</span>
+  </div>
+
+  <div class="layout">
+    <aside class="card">
+      <h2>Configuración</h2>
+      <div id="specificControls"></div>
+      <div class="field"><label>Temperatura inicial (°C)</label><input id="temp" type="number" value="25" min="-20" max="150" step=".1"></div>
+      <div class="field"><label>Velocidad de adición</label>
+        <select id="addition"><option value="drop">Gota a gota</option><option value="fast">Vertido rápido</option></select>
+      </div>
+      <button class="green" style="width:100%" id="addBtn">＋ Añadir reactivo</button>
+      <div class="measure">
+        <h3>Instrumentos</h3>
+        <button id="phBtn">Medir pH</button>
+        <button id="massBtn">Usar balanza</button>
+        <button id="thermoBtn">Leer termómetro</button>
+        <button id="ionsBtn">Contar iones</button>
+        <div class="readout" id="instrument">Sin lectura</div>
+      </div>
+    </aside>
+
+    <main>
+      <div class="views">
+        <section class="view">
+          <div class="view-title">🔬 Nivel macroscópico</div>
+          <div class="view-body"><canvas id="macroCanvas"></canvas></div>
+        </section>
+        <section class="view">
+          <div class="view-title">⚛ Nivel microscópico / nanoscópico</div>
+          <div class="view-body"><canvas id="microCanvas"></canvas></div>
+        </section>
+        <section class="view">
+          <div class="view-title">∑ Nivel simbólico</div>
+          <div class="view-body">
+            <div id="equations" class="symbolic"></div>
+            <div class="metrics">
+              <div class="metric">pH<b id="mPH">—</b></div>
+              <div class="metric">T (°C)<b id="mTemp">—</b></div>
+              <div class="metric">Producto (mol)<b id="mProduct">—</b></div>
+              <div class="metric">Variable clave<b id="mKey">—</b></div>
+            </div>
+            <div style="margin-top:10px"><canvas id="chart" height="120"></canvas></div>
+          </div>
+        </section>
+      </div>
+      <div class="footerbar">
+        <span class="small">Tiempo de simulación: <b id="time">0.0 s</b></span>
+        <div class="progress"><div id="progress"></div></div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <h3>Registro de observaciones</h3>
+        <div class="log" id="log">Configura una reacción y pulsa “Iniciar”.</div>
+      </div>
+    </main>
+
+    <aside class="card">
+      <h2>Eventos y evaluación</h2>
+      <p class="small">El simulador genera preguntas cuando identifica un evento químico relevante.</p>
+      <div class="quiz" id="quiz"><b>Pregunta conceptual</b><p id="qText">Aún no se ha producido un evento.</p><div id="qOptions"></div></div>
+      <h3 style="margin-top:14px">Modelo científico</h3>
+      <ul class="small" style="padding-left:18px;line-height:1.6">
+        <li>Observa el fenómeno.</li><li>Relaciona partículas y especies.</li><li>Comprueba la ecuación.</li><li>Interpreta los datos.</li><li>Revisa tu explicación.</li>
+      </ul>
+    </aside>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const macro=$("macroCanvas"), micro=$("microCanvas"), chart=$("chart");
+const ctxM=macro.getContext("2d"), ctxP=micro.getContext("2d"), ctxC=chart.getContext("2d");
+let reaction="acid", running=false, t=0, speed=1, last=performance.now(), history=[], events={}, particles=[], answerLocked=false;
+
+const configs={
+ acid:{
+  title:"Ácido–Base",
+  defaults:{a:"HCl",b:"NaOH",ca:.1,cb:.1,va:50,vb:50},
+  options:[
+   ["HCl","NaOH"],["CH₃COOH","NaOH"]
+  ],
+  equation:(c)=>c.a+"(aq) + "+c.b+"(aq) → productos (aq) + H₂O(l)",
+  net:(c)=>c.a==="HCl"?"H⁺(aq) + OH⁻(aq) → H₂O(l)":"CH₃COOH(aq) + OH⁻(aq) → CH₃COO⁻(aq) + H₂O(l)",
+  key:"Ka / neutralización"
+ },
+ redox:{
+  title:"Óxido–Reducción",
+  defaults:{a:"Zn",b:"CuSO₄",ca:.1,cb:.1,va:50,vb:50},
+  options:[["Zn","CuSO₄"],["Fe","HCl"]],
+  equation:(c)=>c.a==="Zn"?"Zn(s) + CuSO₄(aq) → ZnSO₄(aq) + Cu(s)":"Fe(s) + 2HCl(aq) → FeCl₂(aq) + H₂(g)",
+  net:(c)=>c.a==="Zn"?"Zn(s) + Cu²⁺(aq) → Zn²⁺(aq) + Cu(s)":"Fe(s) + 2H⁺(aq) → Fe²⁺(aq) + H₂(g)",
+  key:"E° / Nernst"
+ },
+ precip:{
+  title:"Precipitación",
+  defaults:{a:"Pb(NO₃)₂",b:"KI",ca:.1,cb:.1,va:50,vb:100},
+  options:[["AgNO₃","NaCl"],["Pb(NO₃)₂","KI"]],
+  equation:(c)=>c.a==="AgNO₃"?"AgNO₃(aq) + NaCl(aq) → AgCl(s) + NaNO₃(aq)":"Pb(NO₃)₂(aq) + 2KI(aq) → PbI₂(s) + 2KNO₃(aq)",
+  net:(c)=>c.a==="AgNO₃"?"Ag⁺(aq) + Cl⁻(aq) → AgCl(s)":"Pb²⁺(aq) + 2I⁻(aq) → PbI₂(s)",
+  key:"Q vs Ksp"
+ }
+};
+
+function controls(){
+ const d=configs[reaction].defaults;
+ const pairs=configs[reaction].options.map((x,i)=>`<option value="${i}">${x[0]} + ${x[1]}</option>`).join("");
+ $("specificControls").innerHTML=`
+ <div class="field"><label>Reacción</label><select id="pair">${pairs}</select></div>
+ <div class="row"><div class="field"><label>Concentración A (M)</label><input id="ca" type="number" value="${d.ca}" step=".01" min="0.001"></div><div class="field"><label>Concentración B (M)</label><input id="cb" type="number" value="${d.cb}" step=".01" min="0.001"></div></div>
+ <div class="row"><div class="field"><label>Volumen A (mL)</label><input id="va" type="number" value="${d.va}" step="1" min="1"></div><div class="field"><label>Volumen B (mL)</label><input id="vb" type="number" value="${d.vb}" step="1" min="1"></div></div>`;
+ $("pair").addEventListener("change", resetSim);
+ resetSim();
+}
+function cfg(){
+ const opt=configs[reaction].options[$("pair").value];
+ return {a:opt[0],b:opt[1],ca:+$("ca").value,cb:+$("cb").value,va:+$("va").value,vb:+$("vb").value,temp:+$("temp").value};
+}
+function resetSim(){
+ running=false;t=0;history=[];events={};answerLocked=false;particles=[];$("status").textContent="Listo para experimentar";$("time").textContent="0.0 s";$("progress").style.width="0%";$("log").textContent="Sistema reiniciado. Esperando adición de reactivo.";
+ update();
+}
+function log(s){$("log").innerHTML+=`<div>• ${s}</div>`;$("log").scrollTop=$("log").scrollHeight}
+function start(){running=true;$("status").textContent="Simulación en curso";log("Experimento iniciado: se actualizan las tres representaciones simultáneamente.");}
+function pause(){running=!running;$("status").textContent=running?"Simulación en curso":"Simulación pausada";}
+function rewind(){t=Math.max(0,t-3);update();log("Retroceso de 3 s para observar el evento anterior.");}
+function add(){running=true;t+=reaction==="precip"?1:0.5;log("Reactivo añadido mediante "+($("addition").value==="drop"?"gota a gota":"vertido rápido")+".");eventCheck();update();}
+function chemistry(){
+ const c=cfg(), V=(c.va+c.vb)/1000, nA=c.ca*c.va/1000, nB=c.cb*c.vb/1000;
+ if(reaction==="acid"){
+   const strong=c.a==="HCl";
+   const excess=nA-nB;
+   let pH=7;
+   if(Math.abs(excess)<1e-10)pH=7;
+   else if(excess>0)pH=strong? -Math.log10(excess/V):4.2;
+   else pH=strong?14+Math.log10((-excess)/V):9.8;
+   return {pH,product:Math.min(nA,nB),key:strong?"Neutralización H⁺/OH⁻":"Ka = 1.8×10⁻⁵"};
+ }
+ if(reaction==="redox"){
+   const zn=nA, cu=nB, limiting=Math.min(zn,cu), e0=c.a==="Zn"?1.10:0.44;
+   const q=Math.max(1e-8,(cu+1e-8)/(zn+1e-8)), E=e0-(.05916/2)*Math.log10(q);
+   return {pH:c.a==="Fe"?2.1:7,product:limiting,key:"E ≈ "+E.toFixed(3)+" V"};
+ }
+ const prod=c.a==="AgNO₃"?"AgCl":"PbI₂";
+ let ionA=c.a==="AgNO₃"?nA:nA, ionB=nB;
+ let product=c.a==="AgNO₃"?Math.min(ionA,ionB):Math.min(ionA,ionB/2);
+ const Ksp=c.a==="AgNO₃"?1.8e-10:7.1e-9;
+ const Q=(c.a==="AgNO₃"?c.ca*c.cb:c.ca*c.cb*c.cb);
+ return {pH:7,product:Math.max(0,product*Math.min(1,t/12)),key:"Q/Ksp ≈ "+(Q/Ksp).toExponential(2),Ksp,prod};
+}
+function update(){
+ const c=cfg(), ch=chemistry();
+ $("equations").innerHTML=`
+ <div class="eq"><b>Ecuación molecular</b><br>${configs[reaction].equation(c)}</div>
+ <div class="eq"><b>Ecuación iónica completa</b><br>${ionic(c)}</div>
+ <div class="eq net"><b>Ecuación iónica neta</b><br>${configs[reaction].net(c)}</div>
+ <div class="eq spectator"><b>Iones espectadores</b><br>${spectators(c)}</div>`;
+ $("mPH").textContent=ch.pH.toFixed(2);$("mTemp").textContent=(c.temp+(reaction==="acid"?2*Math.min(t/10,1):reaction==="redox"?0.2*Math.min(t,10):0.5*Math.min(t/10,1))).toFixed(1);
+ $("mProduct").textContent=ch.product.toExponential(2);$("mKey").textContent=ch.key;
+ $("time").textContent=t.toFixed(1)+" s";$("progress").style.width=Math.min(100,t/30*100)+"%";
+ drawMacro(c,ch);drawMicro(c,ch);drawChart();
+}
+function ionic(c){
+ if(reaction==="acid")return c.a==="HCl"?"H⁺(aq) + Cl⁻(aq) + Na⁺(aq) + OH⁻(aq) → H₂O(l) + Na⁺(aq) + Cl⁻(aq)":"CH₃COOH(aq) + Na⁺(aq) + OH⁻(aq) → CH₃COO⁻(aq) + Na⁺(aq) + H₂O(l)";
+ if(reaction==="redox")return c.a==="Zn"?"Zn(s) + Cu²⁺(aq) + SO₄²⁻(aq) → Zn²⁺(aq) + SO₄²⁻(aq) + Cu(s)":"Fe(s) + 2H⁺(aq) + 2Cl⁻(aq) → Fe²⁺(aq) + 2Cl⁻(aq) + H₂(g)";
+ return c.a==="AgNO₃"?"Ag⁺(aq) + NO₃⁻(aq) + Na⁺(aq) + Cl⁻(aq) → AgCl(s) + Na⁺(aq) + NO₃⁻(aq)":"Pb²⁺(aq) + 2NO₃⁻(aq) + 2K⁺(aq) + 2I⁻(aq) → PbI₂(s) + 2K⁺(aq) + 2NO₃⁻(aq)";
+}
+function spectators(c){
+ if(reaction==="acid")return c.a==="HCl"?"Na⁺, Cl⁻":"Na⁺";
+ if(reaction==="redox")return c.a==="Zn"?"SO₄²⁻":"Cl⁻";
+ return c.a==="AgNO₃"?"Na⁺, NO₃⁻":"K⁺, NO₃⁻";
+}
+function drawMacro(c,ch){
+ const w=macro.width=macro.clientWidth*devicePixelRatio,h=macro.height=macro.clientHeight*devicePixelRatio,x=ctxM; x.clearRect(0,0,w,h);x.save();x.scale(devicePixelRatio,devicePixelRatio);
+ const W=macro.clientWidth,H=macro.clientHeight;
+ x.fillStyle="#dceaf5";x.fillRect(0,0,W,H);
+ // bench
+ x.fillStyle="#aab8c5";x.fillRect(0,H-55,W,55);
+ // beaker
+ const bx=W*.22, by=H*.25,bw=W*.56,bh=H*.58;
+ x.strokeStyle="#55718a";x.lineWidth=3;x.strokeRect(bx,by,bw,bh);
+ x.fillStyle=reaction==="precip"&&t>3?"#f5f4ef":reaction==="acid"?"#e9f4ff":"#dcecff";
+ x.fillRect(bx+3,by+bh*.30,bw-6,bh*.67);
+ x.strokeStyle="#8aa2b8";x.beginPath();x.moveTo(bx+5,by+bh*.30);x.lineTo(bx+bw-5,by+bh*.30);x.stroke();
+ // thermometer
+ x.fillStyle="#fff";x.strokeStyle="#60788c";x.strokeRect(W*.84,H*.24,18,H*.48);x.fillStyle="#d33";let th=H*.24+(H*.48)*(1-Math.min(1,(c.temp-10)/70));x.fillRect(W*.84+5,th,8,H*.72+H*.24-th);
+ // pipettes
+ x.fillStyle="#d8e6f2";x.fillRect(W*.10,H*.06,W*.12,H*.18);x.fillRect(W*.78,H*.06,W*.12,H*.18);
+ x.fillStyle="#17324d";x.font="bold 12px Arial";x.fillText(c.a,W*.105,H*.13);x.fillText(c.b,W*.785,H*.13);
+ if(reaction==="precip"&&t>1){
+   x.fillStyle="#e8e0c8";
+   for(let i=0;i<70;i++){let px=bx+12+(i*37)% (bw-25),py=by+bh*.86-((i*13)%45);x.beginPath();x.arc(px,py,2+(i%3),0,Math.PI*2);x.fill();}
+ }
+ if(reaction==="redox"&&t>2){x.fillStyle="#c87535";x.fillRect(bx+bw*.62,by+bh*.45,8,bh*.35)}
+ if(reaction==="acid"&&t>2){x.fillStyle="#d9eefb";x.font="bold 16px Arial";x.fillText("pH "+ch.pH.toFixed(2),bx+bw*.32,by+bh*.18)}
+ x.restore();
+}
+function drawMicro(c,ch){
+ const w=micro.width=micro.clientWidth*devicePixelRatio,h=micro.height=micro.clientHeight*devicePixelRatio,x=ctxP;x.clearRect(0,0,w,h);x.save();x.scale(devicePixelRatio,devicePixelRatio);
+ const W=micro.clientWidth,H=micro.clientHeight;
+ let grd=x.createLinearGradient(0,0,0,H);grd.addColorStop(0,"#173c5c");grd.addColorStop(1,"#0c263b");x.fillStyle=grd;x.fillRect(0,0,W,H);
+ // water molecules
+ for(let i=0;i<45;i++){let px=(i*71+t*3)%W,py=(i*43+Math.sin(i+t)*8)%H;x.fillStyle="#8fc6df";x.beginPath();x.arc(px,py,2.5,0,7);x.fill();x.fillStyle="#eaf8ff";x.beginPath();x.arc(px+4,py-2,1.6,0,7);x.arc(px-4,py-2,1.6,0,7);x.fill()}
+ if(reaction==="precip"){
+   const count=Math.min(55,Math.floor(t*4));
+   for(let i=0;i<count;i++){let px=W*.32+(i*29)% (W*.36),py=H*.67+(i*17)%80;atom(px,py,i%2?"#e0b84d":"#7957a6",5)}
+   label("Pb²⁺ / I⁻ → red cristalina",W*.05,H*.08)
+ } else if(reaction==="redox"){
+   for(let i=0;i<16;i++){atom(W*.15+(i*47)%W,H*.25+(i*31)%H,i%2?"#61b4d6":"#b9a15a",5)}
+   if(t>2){x.strokeStyle="#f6d365";x.lineWidth=3;x.beginPath();x.moveTo(W*.35,H*.5);x.lineTo(W*.65,H*.5);x.stroke();label("e⁻ →",W*.43,H*.45)}
+ } else {
+   for(let i=0;i<18;i++)atom(W*.15+(i*57)% (W*.7),H*.25+(i*37)% (H*.55),i%3?"#dcecff":"#e87979",5);
+   if(t>2){label("H⁺ + OH⁻ → H₂O",W*.22,H*.85)}
+ }
+ x.restore();
+}
+function atom(px,py,col,r){ctxP.fillStyle=col;ctxP.beginPath();ctxP.arc(px,py,r,0,7);ctxP.fill()}
+function label(s,x,y){ctxP.fillStyle="#fff";ctxP.font="bold 13px Arial";ctxP.fillText(s,x,y)}
+function drawChart(){
+ const W=chart.width=chart.clientWidth*devicePixelRatio,H=chart.height=120*devicePixelRatio;ctxC.clearRect(0,0,W,H);ctxC.save();ctxC.scale(devicePixelRatio,devicePixelRatio);
+ const ww=chart.clientWidth,hh=120;ctxC.strokeStyle="#9fb1c2";ctxC.beginPath();ctxC.moveTo(35,10);ctxC.lineTo(35,95);ctxC.lineTo(ww-8,95);ctxC.stroke();
+ if(history.length>1){ctxC.strokeStyle="#1266c9";ctxC.lineWidth=2;ctxC.beginPath();history.forEach((v,i)=>{let xx=35+i*(ww-45)/(history.length-1), yy=90-v*70; i?ctxC.lineTo(xx,yy):ctxC.moveTo(xx,yy)});ctxC.stroke()}
+ ctxC.fillStyle="#64748b";ctxC.font="11px Arial";ctxC.fillText("variable química",40,15);ctxC.restore();
+}
+function eventCheck(){
+ if(t>2&&!events.first){events.first=true;showQuiz(
+ reaction==="precip"?"¿Por qué los iones espectadores no forman el precipitado?":
+ reaction==="redox"?"¿Qué especie pierde electrones en la reacción?":
+ "¿Qué especies reaccionan directamente para formar agua?",
+ reaction==="precip"?["Porque K⁺ y NO₃⁻ permanecen disueltos.","Porque desaparecen del sistema."]:reaction==="redox"?["Zn/Fe, porque se oxida.","Cu²⁺/H⁺, porque siempre pierde electrones."]:["H⁺ y OH⁻.","Na⁺ y Cl⁻."]);
+ }
+ if(t>8&&!events.second){events.second=true;log("Evento clave detectado: el estado macroscópico se relaciona con especies microscópicas y ecuaciones.");}
+}
+function showQuiz(q,opts){answerLocked=false;$("qText").textContent=q;$("qOptions").innerHTML=opts.map((o,i)=>`<button onclick="answer(${i})">${o}</button>`).join(" ")}
+function answer(i){if(answerLocked)return;answerLocked=true;let correct=(reaction==="precip"||reaction==="redox"||reaction==="acid")?0:0;$("qOptions").innerHTML+=`<p><b>${i===correct?"✓ Explicación correcta":"✗ Revisa el modelo"}</b></p>`;log(i===correct?"Respuesta conceptual correcta.":"Respuesta registrada para revisión.");}
+function loop(now){let dt=(now-last)/1000;last=now;if(running){t+=dt*speed;eventCheck();let ch=chemistry();history.push(Math.min(1,ch.product/(cfg().ca*cfg().va/1000+1e-9)));if(history.length>80)history.shift();update();if(t>30){running=false;$("status").textContent="Simulación completada";log("Fin del intervalo de simulación.");}}requestAnimationFrame(loop)}
+document.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{document.querySelectorAll("[data-r]").forEach(x=>x.classList.remove("active"));b.classList.add("active");reaction=b.dataset.r;controls();});
+$("start").onclick=start;$("pause").onclick=pause;$("rewind").onclick=rewind;$("reset").onclick=resetSim;$("addBtn").onclick=add;
+$("speed").onclick=()=>{speed=speed===1?2:speed===2?.5:1;$("speed").textContent="Velocidad ×"+speed};
+$("phBtn").onclick=()=>{let ch=chemistry();$("instrument").textContent="pH = "+ch.pH.toFixed(2)};
+$("massBtn").onclick=()=>{$("instrument").textContent="Masa estimada del producto = "+(chemistry().product* (reaction==="precip"?(reaction==="precip"&&cfg().a==="AgNO₃"?143.32:461.01):18)).toFixed(3)+" g"};
+$("thermoBtn").onclick=()=>{$("instrument").textContent="T = "+$("mTemp").textContent+" °C"};
+$("ionsBtn").onclick=()=>{$("instrument").textContent="Conteo relativo de especies: actualizado en tiempo real"};
+controls();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
